@@ -1,10 +1,10 @@
 self.__precacheManifest = (self.__precacheManifest || []).concat([
   {
-    "revision": "159e81dce4d6789e0d119af55abb827d",
+    "revision": "5b14d37f7fc496c0ed0478b558910965",
     "url": "/modern-portfolio/index.html"
   },
   {
-    "revision": "5f0ded75cbf9865e9659",
+    "revision": "6bc6c98329d171ad9c49",
     "url": "/modern-portfolio/static/css/main.df273849.chunk.css"
   },
   {
@@ -12,8 +12,8 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "/modern-portfolio/static/js/2.4cc6414f.chunk.js"
   },
   {
-    "revision": "5f0ded75cbf9865e9659",
-    "url": "/modern-portfolio/static/js/main.1e02560d.chunk.js"
+    "revision": "6bc6c98329d171ad9c49",
+    "url": "/modern-portfolio/static/js/main.9cd40a10.chunk.js"
   },
   {
     "revision": "07f71d20686964b92431",
