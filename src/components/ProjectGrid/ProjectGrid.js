@@ -26,9 +26,9 @@ const ProjectGrid = () => {
       <div className="special-project">
         <h3>Displacement Project</h3>
         <p>Check out my special Displacement project.</p>
-        <a href="/Displacement.html" className="special-project-button" target="_blank" rel="noopener noreferrer">
-          View Displacement Project
-        </a>
+        <a href="./Displacement.html" className="special-project-button" target="_blank" rel="noopener noreferrer">
+  View Displacement Project
+</a>
       </div>
     </section>
   );
