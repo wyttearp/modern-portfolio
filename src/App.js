@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { HashRouter as Router, Route, Routes } from 'react-router-dom';
 import Header from './components/Header/Header';
 import Hero from './components/Hero/Hero';
 import ProjectGrid from './components/ProjectGrid/ProjectGrid';
@@ -33,7 +33,7 @@ function App() {
           </Routes>
         </main>
         <footer>
-          <p>&copy; 2024 Wyatt LeVine. All rights reserved.</p>
+          <p>&copy; 2024 Your Name. All rights reserved.</p>
         </footer>
       </div>
     </Router>
