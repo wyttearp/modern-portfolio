@@ -1,24 +1,42 @@
-import logo from './logo.svg';
+import React from 'react';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Header from './components/Header/Header';
+import Hero from './components/Hero/Hero';
+import ProjectGrid from './components/ProjectGrid/ProjectGrid';
+import Skills from './components/Skills/Skills';
+import DesignSection from './components/SkillsSections/DesignSection';
+import DevelopmentSection from './components/SkillsSections/DevelopmentSection';
+import AnimationSection from './components/SkillsSections/AnimationSection';
+import VideoSection from './components/SkillsSections/VideoSection';
+import Contact from './components/Contact/Contact';
 import './App.css';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <div className="App">
+        <Header />
+        <main>
+          <Routes>
+            <Route path="/" element={
+              <>
+                <Hero />
+                <ProjectGrid />
+                <Skills />
+                <Contact />
+              </>
+            } />
+            <Route path="/skills/design" element={<DesignSection />} />
+            <Route path="/skills/development" element={<DevelopmentSection />} />
+            <Route path="/skills/animation" element={<AnimationSection />} />
+            <Route path="/skills/video" element={<VideoSection />} />
+          </Routes>
+        </main>
+        <footer>
+          <p>&copy; 2024 Wyatt LeVine. All rights reserved.</p>
+        </footer>
+      </div>
+    </Router>
   );
 }
 
