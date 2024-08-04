@@ -1,14 +1,14 @@
 {
   "files": {
     "main.css": "/modern-portfolio/static/css/main.df273849.chunk.css",
-    "main.js": "/modern-portfolio/static/js/main.4dbe204b.chunk.js",
-    "main.js.map": "/modern-portfolio/static/js/main.4dbe204b.chunk.js.map",
+    "main.js": "/modern-portfolio/static/js/main.1e02560d.chunk.js",
+    "main.js.map": "/modern-portfolio/static/js/main.1e02560d.chunk.js.map",
     "runtime~main.js": "/modern-portfolio/static/js/runtime~main.534d0616.js",
     "runtime~main.js.map": "/modern-portfolio/static/js/runtime~main.534d0616.js.map",
-    "static/js/2.9e0238e0.chunk.js": "/modern-portfolio/static/js/2.9e0238e0.chunk.js",
-    "static/js/2.9e0238e0.chunk.js.map": "/modern-portfolio/static/js/2.9e0238e0.chunk.js.map",
+    "static/js/2.4cc6414f.chunk.js": "/modern-portfolio/static/js/2.4cc6414f.chunk.js",
+    "static/js/2.4cc6414f.chunk.js.map": "/modern-portfolio/static/js/2.4cc6414f.chunk.js.map",
     "index.html": "/modern-portfolio/index.html",
-    "precache-manifest.e9b24cb438a59b66718ecfea85ccc52a.js": "/modern-portfolio/precache-manifest.e9b24cb438a59b66718ecfea85ccc52a.js",
+    "precache-manifest.db3406b8c95500b7189458e3ccf54f4a.js": "/modern-portfolio/precache-manifest.db3406b8c95500b7189458e3ccf54f4a.js",
     "service-worker.js": "/modern-portfolio/service-worker.js",
     "static/css/main.df273849.chunk.css.map": "/modern-portfolio/static/css/main.df273849.chunk.css.map"
   }
