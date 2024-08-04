@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Image Visualization with Depth-Based Shadows, Handheld Effect, Bloom, and Film Grain</title>
+    <style>
+        body, html, #container { margin: 0; padding: 0; width: 1009px; height: 540px; overflow: hidden; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+</head>
+<body>
+    <div id="container"></div>
+    <script>
+        const W = 1009, H = 540, AR = W / H, DC = 250, ID = 4e3;
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 1e3);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(W, H);
+        document.getElementById("container").appendChild(renderer.domElement);
+        const loader = new THREE.TextureLoader();
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        let material;
+        const ao = new THREE.Vector2();
+        const dp = new Float32Array(DC * 2);
+        const ds = new Float32Array(DC);
+        const da = new Float32Array(DC);
+        const dsp = new Float32Array(DC);
+        const dop = new Float32Array(DC);
+
+        // Set up EffectComposer and UnrealBloomPass
+        const composer = new THREE.EffectComposer(renderer);
+        const renderPass = new THREE.RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(W, H), 0.5, 0.4, 0.85);
+        composer.addPass(bloomPass);
+
+        let lastTime = 0;
+        const targetFPS = 60;
+        const targetFrameTime = 1000 / targetFPS;
+        const cycleTime = 5;
+
+        for (let i = 0; i < DC; i++) {
+            dp[i * 2] = Math.random();
+            dp[i * 2 + 1] = Math.random();
+            ds[i] = .02 * Math.pow(Math.random(), 2) + .001;
+            da[i] = 2 * Math.PI * Math.random();
+            dsp[i] = 2e-4 * Math.random() + 1e-4;
+            dop[i] = .3 * Math.random() + .1;
+        }
+
+        const eic = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+        Promise.all([loader.loadAsync("col2.png"), loader.loadAsync("depth2.png")])
+        .then(([ct, dt]) => {
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    colorTexture: { value: ct },
+                    depthTexture: { value: dt },
+                    offset: { value: new THREE.Vector2() },
+                    autoOffset: { value: new THREE.Vector2() },
+                    time: { value: 0 },
+                    dustPositions: { value: dp },
+                    dustSizes: { value: ds },
+                    dustOpacities: { value: dop },
+                    aspectRatio: { value: AR },
+                    focusParams: { value: new THREE.Vector3(.5, .05, 1) },
+                    fadeWhiteZoom: { value: new THREE.Vector4(0, 1, 1.25, 0) },
+                    lensPositions: { value: [new THREE.Vector2(.9, .9), new THREE.Vector2(.9, .9), new THREE.Vector2(.9, .9)] },
+                    lensColor: { value: new THREE.Vector3(.7, .5, .3) },
+                    lensIntensity: { value: 0.5 },
+                    shadowIntensity: { value: 2000 },
+                    cameraOffset: { value: new THREE.Vector2() },
+                    cameraRotation: { value: 0 }
+                },
+                vertexShader: `
+                    uniform vec4 fadeWhiteZoom;
+                    uniform vec2 cameraOffset;
+                    uniform float cameraRotation;
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        vec4 pos = vec4(position, 1.);
+                        pos.xy *= fadeWhiteZoom.z * 1.075; // Increase zoom by 7.5%
+                        
+                        // Apply camera rotation
+                        float c = cos(cameraRotation);
+                        float s = sin(cameraRotation);
+                        pos.xy = mat2(c, -s, s, c) * pos.xy;
+                        
+                        // Apply camera offset
+                        pos.xy += cameraOffset;
+                        
+                        gl_Position = projectionMatrix * modelViewMatrix * pos;
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D colorTexture, depthTexture;
+                    uniform vec2 offset, autoOffset;
+                    uniform float time, aspectRatio, shadowIntensity;
+                    uniform vec2 dustPositions[${DC}];
+                    uniform float dustSizes[${DC}], dustOpacities[${DC}];
+                    uniform vec3 focusParams, lensColor;
+                    uniform vec4 fadeWhiteZoom;
+                    uniform vec2 lensPositions[3];
+                    uniform float lensIntensity;
+                    varying vec2 vUv;
+
+                    vec3 lf(vec2 u, vec2 p) {
+                        vec2 m = u - p;
+                        float d = length(m);
+                        float f = .95 + .05 * fract(sin(dot(vec2(time * 50., 0.), vec2(12.9898, 78.233))) * 43758.5453123);
+                        float b = 1. / (1. + 32. * d * d);
+                        vec3 c = lensColor * (.5 * b + .3 * smoothstep(.5, .47, d) * smoothstep(.3, .33, d)) * f;
+                        float sa = atan(m.y, m.x);
+                        for (int i = 0; i < 6; i++) {
+                            float a = float(i) / 6. * 6.28, sd = abs(mod(sa - a, 6.28) - 3.14);
+                            c += lensColor * .5 * smoothstep(.1, 0., sd) * smoothstep(1., .7, d) * smoothstep(0., .2, d) * f;
+                        }
+                        vec2 uf = mix(u, u * length(u), -.5);
+                        for (int i = 1; i <= 8; i++) {
+                            float fp = float(i) / 9., fd = length(mix(p, vec2(.5), fp) - uf);
+                            float fs = mix(.03, .01, fp), fst = smoothstep(fs, fs * .1, fd) * smoothstep(0., .2, fd);
+                            c += lensColor * fst * (1. - fp) * .2 * f;
+                        }
+                        return c * .3;
+                    }
+
+                    float filmGrain(vec2 uv, float time) {
+                        float x = (uv.x + 4.0 ) * (uv.y + 4.0 ) * (time * 10.0);
+                        vec4 grain = vec4(mod((mod(x, 13.0) + 1.0) * (mod(x, 123.0) + 1.0), 0.01)-0.005) * 50.0;
+                        return grain.x;
+                    }
+
+                    void main() {
+                        float d = texture2D(depthTexture, vUv).r;
+                        vec2 fu = clamp(vUv + (offset + autoOffset) * (1. - d) * .008, 0., 1.);
+                        vec4 c = texture2D(colorTexture, fu);
+                        float rba = clamp(smoothstep(focusParams.x - focusParams.y, focusParams.x + focusParams.y, abs(d - focusParams.x)), 0., .25);
+                        float tba = max(rba, focusParams.z);
+                        vec4 bc = vec4(0.);
+                        for (int x = -2; x <= 2; x++)
+                            for (int y = -2; y <= 2; y++)
+                                bc += texture2D(colorTexture, fu + vec2(float(x), float(y)) * .004 * tba);
+                        c = mix(c, bc / 25., tba);
+
+                        c.rgb = mix(c.rgb, c.rgb - vec3(0.0, 0.0, 0.0) * d * shadowIntensity, shadowIntensity);
+
+                        vec2 au = vec2(vUv.x * aspectRatio, vUv.y);
+                        for (int i = 0; i < ${DC}; i++) {
+                            vec2 adp = vec2(dustPositions[i].x * aspectRatio, dustPositions[i].y);
+                            float dtd = distance(au, adp);
+                            if (dtd < dustSizes[i]) {
+                                float di = pow(1. - dtd / dustSizes[i], 2.);
+                                c.rgb += lensColor * di * dustOpacities[i] * 0.666;
+                            }
+                        }
+                        vec2 vc = vec2(.5 + sin(time * .5) * .05, .5 + cos(time * .5) * .05);
+                        c.rgb *= 1. - smoothstep(.5, 1.5, distance(vUv, vc)) * .2;
+                        vec3 f = lf(vUv, lensPositions[0]);
+                        f += lf(vUv, lensPositions[1]) * .5;
+                        f += lf(vUv, lensPositions[2]) * .3;
+                        c.rgb = mix(c.rgb, c.rgb + f * 0.9, lensIntensity);
+                        c.rgb = mix(c.rgb, vec3(1.), fadeWhiteZoom.y);
+                        c.a = fadeWhiteZoom.x;
+
+                        // Add film grain
+                        float grainAmount = 0.15; // Adjust this value to control grain intensity
+                        float grain = filmGrain(vUv, time);
+                        c.rgb += vec3(grain) * grainAmount;
+
+                        gl_FragColor = c;
+                    }
+                `
+            });
+            scene.add(new THREE.Mesh(geometry, material));
+            camera.position.z = 1;
+            animate(0);
+        }).catch(e => console.error("Error loading textures:", e));
+
+        function animate(t) {
+            requestAnimationFrame(animate);
+            
+            if (t - lastTime < targetFrameTime) return;
+            
+            lastTime = t;
+
+            if (material) {
+                const e = .001 * t;
+                const n = (e % cycleTime) / cycleTime;
+                const phaseShift = Math.PI / 2; // This is a 25% phase shift (90 degrees)
+                const twoPin = 2 * Math.PI * n + phaseShift;
+                const fourPin = 4 * Math.PI * n;
+
+                material.uniforms.time.value = e;
+                
+                if (t < ID) {
+                    const i = eic(t / ID);
+                    material.uniforms.fadeWhiteZoom.value.set(i, 1 - i, 1.25 - .25 * i, 0);
+                    material.uniforms.focusParams.value.z = 1 - i;
+                } else {
+                    material.uniforms.fadeWhiteZoom.value.set(1, 0, 1, 0);
+                    material.uniforms.focusParams.value.z = 0;
+                }
+
+                material.uniforms.offset.value.set(.6 * Math.sin(twoPin), .3 * Math.sin(fourPin));
+
+                const i = 1.1 + .03 * Math.sin(twoPin);
+                const s = .9 + .015 * Math.sin(fourPin);
+                const lensOffset = .002 * Math.sin(twoPin);
+                material.uniforms.lensPositions.value[0].set(i, s);
+                material.uniforms.lensPositions.value[1].set(i + lensOffset, s + .002 * Math.cos(twoPin));
+                material.uniforms.lensPositions.value[2].set(i + lensOffset, s + .002 * Math.cos(twoPin));
+
+                const dustOffsetX = 0.0005 * Math.sin(twoPin);
+                const dustOffsetY = 0.0005 * Math.cos(twoPin);
+                for (let i = 0; i < DC; i++) {
+                    da[i] += dsp[i];
+                    dp[i * 2] = (dp[i * 2] + Math.cos(da[i]) * dsp[i] + dustOffsetX + 1) % 1;
+                    dp[i * 2 + 1] = (dp[i * 2 + 1] + Math.sin(da[i]) * dsp[i] + dustOffsetY + 1) % 1;
+                }
+                material.uniforms.dustPositions.needsUpdate = true;
+
+                ao.set(.02 * Math.sin(.0005 * e), .02 * Math.cos(.00065 * e));
+                material.uniforms.autoOffset.value.copy(ao);
+                material.uniforms.focusParams.value.x = .5 + .3 * Math.sin(.01 * t);
+                material.uniforms.lensIntensity.value = 1.5 + .1 * Math.random();
+                material.uniforms.lensColor.value.set(
+                    .7 + .1 * Math.sin(.2 * e) + .05 * Math.sin(.37 * e),
+                    .5 + .1 * Math.sin(.3 * e) + .05 * Math.sin(.41 * e),
+                    .3 + .1 * Math.sin(.4 * e) + .05 * Math.sin(.43 * e)
+                    );
+
+                // Add handheld camera movement
+                const maxOffset = 0.025; // Maximum offset (2.5% of the frame)
+                const maxRotation = 0.01; // Maximum rotation (about 0.57 degrees)
+                const speedFactor = 0.42; // Adjusted speed factor
+                
+                // Slowly changing random offset
+                const offsetX = maxOffset * Math.sin(e * 0.3 * speedFactor) * Math.sin(e * 0.7 * speedFactor);
+                const offsetY = maxOffset * Math.sin(e * 0.4 * speedFactor) * Math.sin(e * 0.6 * speedFactor);
+                material.uniforms.cameraOffset.value.set(offsetX, offsetY);
+                
+                // Slowly changing random rotation
+                const rotation = maxRotation * Math.sin(e * 0.5 * speedFactor) * Math.sin(e * 0.8 * speedFactor);
+                material.uniforms.cameraRotation.value = rotation;
+
+                // Animate bloom effect
+                const bloomFlickerSpeed = 0.01;
+                const bloomStrength = 0.04 + 0.04 * Math.sin(e * 10) * Math.sin(e * 7.3);
+                const bloomRadius = 0.3 + 0.1 * Math.sin(e * 8.7) * Math.sin(e * 6.2);
+                const bloomThreshold = 0.8 + 0.1 * Math.sin(e * 9.1) * Math.sin(e * 5.8);
+
+                bloomPass.strength = bloomStrength;
+                bloomPass.radius = bloomRadius;
+                bloomPass.threshold = bloomThreshold;
+            }
+            
+            composer.render();
+        }
+
+        function dispose() {
+            material?.dispose();
+            geometry?.dispose();
+            renderer?.dispose();
+            composer?.dispose();
+        }
+
+        window.addEventListener('unload', dispose);
+    </script>
+</body>
+</html>
